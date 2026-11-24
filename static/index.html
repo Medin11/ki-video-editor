@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Editor</title>
+<style>
+  /* ------------------------------------------------------------ Farben & Grundstil */
+  :root {
+    --bg: #0f1012;
+    --panel: #17181c;
+    --panel-2: #1f2026;
+    --line: #2a2c33;
+    --text: #e9e9ee;
+    --muted: #8b8d98;
+    --accent: #7c6cff;
+    --accent-2: #a093ff;
+    --error: #ff6b6b;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:disabled { cursor: not-allowed; opacity: .4; }
+
+  /* ------------------------------------------------------------ Kopfzeile */
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: .2px; }
+  header .name { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header .spacer { flex: 1; }
+  .btn {
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 7px 12px; font-size: 13px;
+    transition: background .15s, border-color .15s;
+  }
+  .btn:hover:not(:disabled) { background: #272932; border-color: #3a3d47; }
+
+  /* ------------------------------------------------------------ Hauptbereich */
+  main { flex: 1; min-height: 0; display: flex; }
+
+  /* Leerer Zustand: großes Drop-Feld */
+  #dropzone {
+    flex: 1; margin: 24px;
+    border: 2px dashed var(--line); border-radius: 22px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; text-align: center; padding: 24px;
+    transition: border-color .15s, background .15s;
+    cursor: pointer;
+  }
+  #dropzone:hover, body.dragging #dropzone { border-color: var(--accent); background: rgba(124,108,255,.06); }
+  #dropzone .icon { font-size: 46px; opacity: .9; }
+  #dropzone .big { font-size: 22px; font-weight: 600; }
+  #dropzone .small { color: var(--muted); font-size: 14px; }
+
+  /* Editor: Player + Verlauf */
+  #editor { flex: 1; min-height: 0; display: flex; gap: 20px; padding: 20px; }
+  #stage { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  #player-wrap {
+    flex: 1; min-height: 200px;
+    background: #000; border-radius: var(--radius); overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  video { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+  #reply {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 12px 16px; display: flex; gap: 10px; align-items: flex-start;
+  }
+  #reply .who { color: var(--accent-2); font-weight: 600; flex-shrink: 0; }
+  #reply.info .who { color: #5fd0a0; }
+  #reply.error { border-color: rgba(255,107,107,.5); }
+  #reply.error .who { color: var(--error); }
+
+  /* Verlauf rechts */
+  #history {
+    width: 260px; flex-shrink: 0;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px; overflow-y: auto;
+  }
+  #history h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  #history ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  #history li {
+    padding: 8px 10px; border-radius: 10px; background: var(--panel-2);
+    border: 1px solid transparent; font-size: 13px;
+  }
+  #history li { cursor: pointer; transition: background .15s, opacity .15s; }
+  #history li:hover { background: #272932; }
+  #history li.current { border-color: var(--accent); }
+  #history li.off-chain { opacity: .45; }
+  #history li.off-chain:hover { opacity: .8; }
+  #history .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  #history li .meta { color: var(--muted); font-size: 12px; }
+
+  /* ------------------------------------------------------------ Status-Leiste */
+  #status {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; border-radius: var(--radius);
+    background: var(--panel); border: 1px solid var(--line);
+  }
+  .spinner {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.15); border-top-color: var(--accent);
+    animation: spin .8s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #status .bar { flex: 1; height: 6px; background: var(--panel-2); border-radius: 99px; overflow: hidden; }
+  #status .bar div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  #status .pct { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; min-width: 42px; text-align: right; }
+
+  /* ------------------------------------------------------------ Eingabe unten */
+  footer { padding: 0 20px 20px; }
+  #chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chip {
+    background: transparent; border: 1px solid var(--line); border-radius: 99px;
+    padding: 5px 12px; font-size: 13px; color: var(--muted);
+  }
+  .chip:hover:not(:disabled) { color: var(--text); border-color: #3a3d47; }
+  .chip-accent { color: #E8735A; border-color: rgba(232,115,90,.45); }
+  .chip-accent:hover:not(:disabled) { color: #fff; border-color: #E8735A; }
+  #prompt-form {
+    display: flex; gap: 10px; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 8px 8px 8px 16px;
+  }
+  #prompt-form:focus-within { border-color: var(--accent); }
+  #prompt-input {
+    flex: 1; background: transparent; border: 0; outline: 0;
+    color: var(--text); font: inherit; font-size: 15px; padding: 6px 0;
+  }
+  #prompt-input::placeholder { color: var(--muted); }
+  #send {
+    background: var(--accent); border: 0; border-radius: 11px;
+    padding: 9px 16px; font-weight: 600; color: #fff;
+  }
+  #send:hover:not(:disabled) { background: var(--accent-2); }
+
+  .hidden { display: none !important; }
+
+  /* Schmale Fenster: Verlauf unter den Player */
+  @media (max-width: 820px) {
+    #editor { flex-direction: column; overflow-y: auto; }
+    #history { width: auto; }
+    #player-wrap { flex: none; aspect-ratio: 16 / 9; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎬 Video Editor</h1>
+  <span class="name" id="project-name"></span>
+  <span class="spacer"></span>
+  <button class="btn hidden" id="new-video" title="Ein anderes Video öffnen">Neues Video</button>
+</header>
+
+<main>
+  <!-- Leerer Zustand -->
+  <div id="dropzone" tabindex="0">
+    <div class="icon">🎞️</div>
+    <div class="big">Video hier reinziehen</div>
+    <div class="small">oder klicken, um eine Datei auszuwählen · bleibt komplett auf deinem Mac</div>
+    <input type="file" id="file-input" accept="video/*,.mkv,.avi,.mts" hidden>
+  </div>
+
+  <!-- Editor -->
+  <div id="editor" class="hidden">
+    <div id="stage">
+      <div id="player-wrap"><video id="player" controls playsinline preload="metadata"></video></div>
+      <div id="status" class="hidden">
+        <div class="spinner"></div>
+        <span id="status-text">…</span>
+        <div class="bar"><div id="status-bar"></div></div>
+        <span class="pct" id="status-pct"></span>
+      </div>
+      <div id="reply" class="hidden"><span class="who">Claude</span><span id="reply-text"></span></div>
+    </div>
+    <aside id="history">
+      <h2>Versionen</h2>
+      <ol id="history-list"></ol>
+      <div class="hint">Klick auf eine Version, um zu ihr zurückzuspringen.</div>
+    </aside>
+  </div>
+</main>
+
+<footer>
+  <div id="chips">
+    <button class="chip chip-accent" type="button" title="Enge Jump-Cuts, Punch-Zooms, animierte Grafiken &amp; Layouts, animierte Untertitel, 9:16, -14 LUFS – wie die Videos in references/. Tipp: &quot;…im dunklen Stil&quot; oder &quot;…im minimalen Stil&quot;">Schneide im Referenz-Stil</button>
+    <button class="chip" type="button">Entferne alle Pausen</button>
+    <button class="chip" type="button">Füge Untertitel hinzu</button>
+    <button class="chip" type="button">Mach es 9:16 für TikTok</button>
+    <button class="chip" type="button">Mach ein 60-Sekunden-Highlight</button>
+  </div>
+  <form id="prompt-form" autocomplete="off">
+    <input id="prompt-input" placeholder="Was soll mit dem Video passieren?" disabled>
+    <button class="btn" type="button" id="undo" disabled title="Eine Version zurück (⌘Z)">↶ Rückgängig</button>
+    <button class="btn" type="button" id="export" disabled title="Nach Filme › Video Editor Exports speichern">⤓ Exportieren</button>
+    <button id="send" type="submit" disabled>Senden</button>
+  </form>
+</footer>
+
+<script>
+// ============================================================ Zustand
+let project = null;   // history.json des aktuellen Projekts
+let busy = false;     // läuft gerade ein Auftrag?
+
+const $ = (id) => document.getElementById(id);
+const els = {
+  dropzone: $("dropzone"), fileInput: $("file-input"), editor: $("editor"),
+  player: $("player"), name: $("project-name"), newVideo: $("new-video"),
+  status: $("status"), statusText: $("status-text"), statusBar: $("status-bar"), statusPct: $("status-pct"),
+  reply: $("reply"), replyText: $("reply-text"), historyList: $("history-list"),
+  form: $("prompt-form"), input: $("prompt-input"), send: $("send"),
+  undo: $("undo"), exportBtn: $("export"),
+};
+
+// Vorgänger einer Version (null beim Original)
+function parentOf(p, n) {
+  const v = p.versions[n];
+  return v.parent !== undefined ? v.parent : (n > 0 ? n - 1 : null);
+}
+
+// ============================================================ Hilfsfunktionen
+function formatTime(sec) {
+  sec = Math.round(sec || 0);
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+async function api(method, url, body) {
+  const res = await fetch(url, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  let data = {};
+  try { data = await res.json(); } catch { /* keine JSON-Antwort */ }
+  if (!res.ok) throw new Error(data.error || "Der Server antwortet nicht richtig.");
+  return data;
+}
+
+// Sicher in localStorage schreiben/lesen (kann z. B. im privaten Modus fehlschlagen)
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} },
+};
+
+// ============================================================ Anzeige
+function setBusy(value) {
+  busy = value;
+  const enabled = !!project && !busy;
+  els.input.disabled = !enabled;
+  els.send.disabled = !enabled;
+  document.querySelectorAll(".chip").forEach((c) => (c.disabled = !enabled));
+  els.newVideo.disabled = busy;
+  els.exportBtn.disabled = !enabled;
+  els.undo.disabled = !enabled || parentOf(project, project.current) === null;
+}
+
+function showStatus(message, progress) {
+  els.status.classList.remove("hidden");
+  els.statusText.textContent = message;
+  const hasPct = typeof progress === "number";
+  els.statusBar.parentElement.style.visibility = hasPct ? "visible" : "hidden";
+  els.statusBar.style.width = hasPct ? progress + "%" : "0";
+  els.statusPct.textContent = hasPct ? Math.round(progress) + " %" : "";
+}
+
+function hideStatus() { els.status.classList.add("hidden"); }
+
+function showReply(text, kind = "claude") {
+  els.reply.classList.remove("hidden");
+  els.reply.classList.toggle("error", kind === "error");
+  els.reply.classList.toggle("info", kind === "info");
+  els.reply.querySelector(".who").textContent =
+    kind === "error" ? "Hoppla" : kind === "info" ? "Gespeichert" : "Claude";
+  els.replyText.textContent = text;
+}
+
+function showEditor() {
+  els.dropzone.classList.add("hidden");
+  els.editor.classList.remove("hidden");
+  els.newVideo.classList.remove("hidden");
+}
+
+function showDropzone() {
+  project = null;
+  store.set("lastProject", null);
+  els.player.removeAttribute("src");
+  els.player.load();
+  els.name.textContent = "";
+  els.reply.classList.add("hidden");
+  hideStatus();
+  els.editor.classList.add("hidden");
+  els.newVideo.classList.add("hidden");
+  els.dropzone.classList.remove("hidden");
+  setBusy(false);
+}
+
+function renderProject(p) {
+  const previous = project;
+  project = p;
+  store.set("lastProject", p.id);
+  showEditor();
+  els.name.textContent = p.name;
+
+  // Player nur neu laden, wenn sich die Version geändert hat
+  const src = `/video/${p.id}/${p.current}`;
+  if (!previous || previous.id !== p.id || previous.current !== p.current) {
+    els.player.src = src;
+  }
+
+  // Welche Versionen stecken im aktuellen Video? (Kette vom Original bis zur aktuellen)
+  const inChain = new Set();
+  for (let n = p.current; n !== null; n = parentOf(p, n)) inChain.add(n);
+
+  // Verlauf (neueste oben)
+  els.historyList.innerHTML = "";
+  [...p.versions].reverse().forEach((v) => {
+    const li = document.createElement("li");
+    if (v.n === p.current) li.classList.add("current");
+    if (!inChain.has(v.n)) li.classList.add("off-chain");
+    if (v.reply) li.title = v.reply;
+    li.addEventListener("click", () => selectVersion(v.n));
+    const title = document.createElement("div");
+    title.textContent = v.prompt ? `„${v.prompt}“` : v.label;
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = `v${v.n} · ${formatTime(v.duration)}`;
+    li.append(title, meta);
+    els.historyList.append(li);
+  });
+  setBusy(busy);
+}
+
+// ============================================================ Hintergrund-Aufträge abfragen
+async function waitForJob(jobId) {
+  while (true) {
+    const job = await api("GET", `/status/${jobId}`);
+    if (job.state === "done") return job.result;
+    if (job.state === "error") throw new Error(job.error);
+    showStatus(job.message, job.progress);
+    await new Promise((r) => setTimeout(r, 700));
+  }
+}
+
+// ============================================================ Hochladen
+function uploadFile(file) {
+  if (busy) return;
+  if (file.type && !file.type.startsWith("video/") && !/\.(mkv|avi|mts)$/i.test(file.name)) {
+    alert("Das sieht nicht nach einem Video aus. Bitte zieh eine Videodatei rein.");
+    return;
+  }
+  // Wechsel zur Editor-Ansicht mit Upload-Fortschritt
+  project = null;
+  els.player.removeAttribute("src");
+  els.player.load();
+  els.historyList.innerHTML = "";
+  els.reply.classList.add("hidden");
+  els.name.textContent = file.name;
+  showEditor();
+  setBusy(true);
+  showStatus("Lade Video…", 0);
+
+  // XMLHttpRequest statt fetch, weil wir so den Upload-Fortschritt sehen
+  const xhr = new XMLHttpRequest();
+  const form = new FormData();
+  form.append("video", file);
+  xhr.open("POST", "/upload");
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) showStatus("Lade Video…", (e.loaded / e.total) * 100);
+  };
+  xhr.onload = async () => {
+    let data = {};
+    try { data = JSON.parse(xhr.responseText); } catch {}
+    if (xhr.status !== 200) return failUpload(data.error || "Hochladen hat nicht geklappt.");
+    try {
+      const result = await waitForJob(data.job_id);
+      hideStatus();
+      setBusy(false);
+      renderProject(result.project);
+      els.input.focus();
+    } catch (err) {
+      failUpload(err.message);
+    }
+  };
+  xhr.onerror = () => failUpload("Keine Verbindung zum Editor-Server – bitte den Editor neu starten.");
+  xhr.send(form);
+}
+
+function failUpload(message) {
+  hideStatus();
+  setBusy(false);
+  showDropzone();
+  alert(message);
+}
+
+// ============================================================ Prompt senden
+async function sendPrompt(text) {
+  text = text.trim();
+  if (!text || !project || busy) return;
+  setBusy(true);
+  showStatus("Starte…");
+  try {
+    const { job_id } = await api("POST", "/prompt", { project_id: project.id, text });
+    const result = await waitForJob(job_id);
+    els.input.value = "";
+    showReply(result.reply);
+    if (result.project) renderProject(result.project);
+  } catch (err) {
+    showReply(err.message, "error");
+  } finally {
+    hideStatus();
+    setBusy(false);
+    els.input.focus();
+  }
+}
+
+// ============================================================ Rückgängig, Version wählen, Export
+async function undo() {
+  if (!project || busy || parentOf(project, project.current) === null) return;
+  try {
+    const { project: p } = await api("POST", "/undo", { project_id: project.id });
+    renderProject(p);
+    showReply(`Zurück zu v${p.current}.`, "claude");
+    els.reply.querySelector(".who").textContent = "↶";
+  } catch (err) { showReply(err.message, "error"); }
+}
+
+async function selectVersion(n) {
+  if (!project || busy || n === project.current) return;
+  try {
+    const { project: p } = await api("POST", "/select", { project_id: project.id, n });
+    renderProject(p);
+    const v = p.versions[n];
+    showReply(v.reply || "Original wieder aktiv.");
+  } catch (err) { showReply(err.message, "error"); }
+}
+
+async function exportVideo() {
+  if (!project || busy) return;
+  els.exportBtn.disabled = true;
+  try {
+    const { display } = await api("GET", `/export/${project.id}`);
+    showReply(`${display} (im Finder geöffnet)`, "info");
+  } catch (err) {
+    showReply(err.message, "error");
+  } finally { setBusy(busy); }
+}
+
+// ============================================================ Ereignisse
+els.undo.addEventListener("click", undo);
+els.exportBtn.addEventListener("click", exportVideo);
+// ⌘Z = Rückgängig (außer man tippt gerade Text in der Eingabezeile)
+window.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+    if (document.activeElement === els.input && els.input.value) return;
+    e.preventDefault();
+    undo();
+  }
+});
+els.form.addEventListener("submit", (e) => { e.preventDefault(); sendPrompt(els.input.value); });
+document.querySelectorAll(".chip").forEach((chip) =>
+  chip.addEventListener("click", () => { els.input.value = chip.textContent; sendPrompt(chip.textContent); }));
+
+els.dropzone.addEventListener("click", () => els.fileInput.click());
+els.dropzone.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") els.fileInput.click(); });
+els.fileInput.addEventListener("change", () => {
+  if (els.fileInput.files[0]) uploadFile(els.fileInput.files[0]);
+  els.fileInput.value = "";
+});
+els.newVideo.addEventListener("click", () => { if (!busy) showDropzone(); });
+
+// Drag & Drop irgendwo ins Fenster
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => { e.preventDefault(); dragDepth++; document.body.classList.add("dragging"); });
+window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dragging"); } });
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove("dragging");
+  const file = e.dataTransfer.files[0];
+  if (!file || busy) return;
+  if (project && !confirm(`„${file.name}“ als neues Projekt öffnen?`)) return;
+  uploadFile(file);
+});
+
+// ============================================================ Start: letztes Projekt wieder öffnen
+(async () => {
+  const last = store.get("lastProject");
+  if (!last) return;
+  try {
+    const { project: p } = await api("GET", `/project/${last}`);
+    renderProject(p);
+  } catch {
+    store.set("lastProject", null);
+  }
+})();
+</script>
+</body>
+</html>

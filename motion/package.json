@@ -1,0 +1,14 @@
+{
+  "name": "video-editor-motion",
+  "private": true,
+  "description": "Animierte Grafiken für den Video Editor (Remotion). Versionen bewusst fest gepinnt.",
+  "scripts": {
+    "studio": "remotion studio src/index.ts"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.540",
+    "remotion": "4.0.540",
+    "react": "19.2.9",
+    "react-dom": "19.2.9"
+  }
+}

@@ -1,0 +1,17 @@
+.venv/
+projects/
+__pycache__/
+*.pyc
+.DS_Store
+mac-app/build/
+
+motion/node_modules/
+
+# Referenzvideos anderer Creator – nicht veröffentlichen
+references/
+# Eigene Bilder/B-Roll bleiben lokal (nur die Anleitung kommt ins Repo)
+assets/*
+!assets/LIESMICH.txt
+# Remotion-Zwischendateien
+motion/out/
+motion/.remotion/

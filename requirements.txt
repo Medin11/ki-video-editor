@@ -1,0 +1,4 @@
+flask>=3.0
+# Transkription: mlx-whisper auf Apple Silicon, faster-whisper auf Intel-Macs
+mlx-whisper; platform_machine == "arm64"
+faster-whisper; platform_machine != "arm64"

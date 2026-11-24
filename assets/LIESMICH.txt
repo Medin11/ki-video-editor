@@ -1,0 +1,3 @@
+Hier eigene Screenshots, Bilder und kurze Clips ablegen (png, jpg, webp, gif, mp4, mov).
+Claude kann sie als B-Roll in die animierten Grafiken einbauen, wenn sie zum Gesagten passen.
+Tipp: sprechende Dateinamen verwenden, z. B. "github-stars.png" oder "ordner-struktur.png".
